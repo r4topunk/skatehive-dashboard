@@ -5,14 +5,9 @@ import type { Sponsorship, User, Identity, SoftPost, SoftVote } from "@/lib/type
 import { getUserTier, tierConfig } from "@/lib/tiers"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
-import { CheckCircle, Clock, AlertTriangle, Loader2, ExternalLink, Sparkles, Trophy } from "lucide-react"
+import { CheckCircle, Clock, AlertTriangle, Loader2, Sparkles, Trophy } from "lucide-react"
+import { SponsorshipsTable } from "@/components/dashboard/sponsorships-table"
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-}
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
@@ -21,7 +16,6 @@ function timeAgo(dateStr: string) {
   if (hours < 24) return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
 }
-function truncateTx(tx: string) { return `${tx.slice(0, 8)}...${tx.slice(-6)}` }
 
 const statusConfig: Record<string, { icon: typeof CheckCircle; color: string; bg: string }> = {
   completed: { icon: CheckCircle, color: "text-primary", bg: "bg-primary/10" },
@@ -39,8 +33,8 @@ export default async function SponsorshipsPage() {
     query<Pick<SoftVote, "id" | "user_id">>("userbase_soft_votes", { select: "id,user_id" }),
   ])
 
-  const userMap = new Map<string, User>()
-  for (const u of users) userMap.set(u.id, u)
+  const userMap: Record<string, User> = {}
+  for (const u of users) userMap[u.id] = u
 
   const identityMap = new Map<string, Identity[]>()
   for (const id of identities) {
@@ -59,7 +53,7 @@ export default async function SponsorshipsPage() {
   const sponsorCounts = sponsorships.filter((s) => s.status === "completed").reduce((acc, s) => {
     acc.set(s.sponsor_user_id, (acc.get(s.sponsor_user_id) ?? 0) + 1); return acc
   }, new Map<string, number>())
-  const leaderboard = Array.from(sponsorCounts.entries()).sort((a, b) => b[1] - a[1]).map(([userId, count]) => ({ user: userMap.get(userId), count }))
+  const leaderboard = Array.from(sponsorCounts.entries()).sort((a, b) => b[1] - a[1]).map(([userId, count]) => ({ user: userMap[userId], count }))
 
   const candidates = users
     .filter((u) => { const tier = getUserTier(identityMap.get(u.id) ?? []); if (tier === "full") return false; const eng = engagementMap.get(u.id); return eng && (eng.posts > 0 || eng.votes > 0) })
@@ -91,47 +85,7 @@ export default async function SponsorshipsPage() {
         <Card className="lg:col-span-2 animate-fade-up" style={{ animationDelay: "320ms" }}>
           <CardHeader><CardTitle className="font-heading text-base font-semibold">All Sponsorships</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-6">Hive Account</TableHead>
-                  <TableHead>Lite User</TableHead>
-                  <TableHead>Sponsor</TableHead>
-                  <TableHead>Cost</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="pr-6 text-right">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sponsorships.map((s) => {
-                  const liteUser = userMap.get(s.lite_user_id); const sponsorUser = userMap.get(s.sponsor_user_id)
-                  const config = statusConfig[s.status] ?? statusConfig.pending
-                  return (
-                    <TableRow key={s.id} className="table-row-hover">
-                      <TableCell className="pl-6">
-                        <div>
-                          <span className="font-mono-data text-sm font-medium">@{s.hive_username}</span>
-                          {s.hive_tx_id && (
-                            <a href={`https://hivehub.dev/tx/${s.hive_tx_id}`} target="_blank" rel="noopener noreferrer" className="mt-0.5 flex items-center gap-1 font-mono-data text-[10px] text-muted-foreground hover:text-foreground transition-colors">
-                              {truncateTx(s.hive_tx_id)}<ExternalLink className="size-2" />
-                            </a>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell><span className="text-sm">{liteUser?.display_name ?? liteUser?.handle ?? s.lite_user_id.slice(0, 8)}</span></TableCell>
-                      <TableCell><span className="text-sm font-medium">{sponsorUser?.display_name ?? sponsorUser?.handle ?? s.sponsor_user_id.slice(0, 8)}</span></TableCell>
-                      <TableCell><span className="font-mono-data text-sm">{s.cost_amount ? `${s.cost_amount} HIVE` : s.cost_type}</span></TableCell>
-                      <TableCell>
-                        <Badge variant={s.status === "completed" ? "default" : s.status === "failed" ? "destructive" : "secondary"} className="text-[10px] gap-1">
-                          <config.icon className="size-2.5" />{s.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="pr-6 text-right"><span className="font-mono-data text-xs text-muted-foreground">{formatDate(s.created_at)}</span></TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+            <SponsorshipsTable sponsorships={sponsorships} userMap={userMap} />
           </CardContent>
         </Card>
 

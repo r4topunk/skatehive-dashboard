@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
+import { SortableHead, type SortDirection, useSortToggle } from "@/components/ui/sortable-head"
 import { Shield, Wallet, Mail, Key, Sparkles, Search, ChevronRight } from "lucide-react"
 
 const tierIcons: Record<AccountTier, typeof Shield> = { full: Shield, evm: Wallet, lite: Mail }
@@ -58,6 +59,11 @@ export function UsersTable({ rows, tierCounts, sponsoredCount }: Props) {
   const [tierFilter, setTierFilter] = useState<AccountTier | "all" | "candidates">("all")
   const [sortBy, setSortBy] = useState<"created" | "activity" | "engagement">("created")
 
+  type ColSortKey = "user" | "tier" | "email" | "engagement" | "lastActive" | "joined"
+  const [colSortKey, setColSortKey] = useState<ColSortKey | null>(null)
+  const [colSortDir, setColSortDir] = useState<SortDirection>(null)
+  const toggleCol = useSortToggle(colSortKey, colSortDir, setColSortKey, setColSortDir)
+
   const filtered = useMemo(() => {
     let result = rows
 
@@ -80,8 +86,29 @@ export function UsersTable({ rows, tierCounts, sponsoredCount }: Props) {
       result = result.filter((r) => r.tier === tierFilter)
     }
 
-    // Sort
-    if (sortBy === "activity") {
+    // Sort — column header takes priority over toolbar sort
+    if (colSortKey && colSortDir) {
+      result = [...result].sort((a, b) => {
+        let cmp = 0
+        switch (colSortKey) {
+          case "user": cmp = (a.user.display_name ?? a.user.handle ?? "").localeCompare(b.user.display_name ?? b.user.handle ?? ""); break
+          case "tier": cmp = tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier); break
+          case "email": cmp = (a.email ?? "").localeCompare(b.email ?? ""); break
+          case "engagement": {
+            const aEng = (a.engagement?.posts ?? 0) + (a.engagement?.votes ?? 0)
+            const bEng = (b.engagement?.posts ?? 0) + (b.engagement?.votes ?? 0)
+            cmp = aEng - bEng; break
+          }
+          case "lastActive": {
+            const aTime = a.lastActive ? new Date(a.lastActive).getTime() : 0
+            const bTime = b.lastActive ? new Date(b.lastActive).getTime() : 0
+            cmp = aTime - bTime; break
+          }
+          case "joined": cmp = new Date(a.user.created_at).getTime() - new Date(b.user.created_at).getTime(); break
+        }
+        return colSortDir === "asc" ? cmp : -cmp
+      })
+    } else if (sortBy === "activity") {
       result = [...result].sort((a, b) => {
         const aTime = a.lastActive ? new Date(a.lastActive).getTime() : 0
         const bTime = b.lastActive ? new Date(b.lastActive).getTime() : 0
@@ -96,7 +123,7 @@ export function UsersTable({ rows, tierCounts, sponsoredCount }: Props) {
     }
 
     return result
-  }, [rows, search, tierFilter, sortBy])
+  }, [rows, search, tierFilter, sortBy, colSortKey, colSortDir])
 
   return (
     <div className="space-y-4">
@@ -153,9 +180,9 @@ export function UsersTable({ rows, tierCounts, sponsoredCount }: Props) {
           {(["created", "activity", "engagement"] as const).map((s) => (
             <button
               key={s}
-              onClick={() => setSortBy(s)}
+              onClick={() => { setSortBy(s); setColSortKey(null); setColSortDir(null) }}
               className={`rounded-full px-2 py-1 text-[10px] font-medium transition-colors ${
-                sortBy === s ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+                sortBy === s && !colSortKey ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {s === "created" ? "Newest" : s === "activity" ? "Last Active" : "Most Active"}
@@ -183,14 +210,14 @@ export function UsersTable({ rows, tierCounts, sponsoredCount }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-6 w-[220px]">User</TableHead>
-                <TableHead className="w-[65px]">Tier</TableHead>
-                <TableHead>Email</TableHead>
+                <SortableHead className="pl-6 w-[220px]" active={colSortKey === "user"} direction={colSortDir} onClick={() => { toggleCol("user"); setSortBy("created") }}>User</SortableHead>
+                <SortableHead className="w-[65px]" active={colSortKey === "tier"} direction={colSortDir} onClick={() => { toggleCol("tier"); setSortBy("created") }}>Tier</SortableHead>
+                <SortableHead active={colSortKey === "email"} direction={colSortDir} onClick={() => { toggleCol("email"); setSortBy("created") }}>Email</SortableHead>
                 <TableHead>Identities</TableHead>
-                <TableHead className="text-center w-[80px]">Engagement</TableHead>
-                <TableHead className="w-[80px]">Last Active</TableHead>
+                <SortableHead className="text-center w-[80px]" active={colSortKey === "engagement"} direction={colSortDir} onClick={() => { toggleCol("engagement"); setSortBy("created") }}>Engagement</SortableHead>
+                <SortableHead className="w-[80px]" active={colSortKey === "lastActive"} direction={colSortDir} onClick={() => { toggleCol("lastActive"); setSortBy("created") }}>Last Active</SortableHead>
                 <TableHead className="w-[90px]">Sponsored</TableHead>
-                <TableHead className="w-[60px]">Joined</TableHead>
+                <SortableHead className="w-[60px]" active={colSortKey === "joined"} direction={colSortDir} onClick={() => { toggleCol("joined"); setSortBy("created") }}>Joined</SortableHead>
                 <TableHead className="pr-6 w-[30px]"></TableHead>
               </TableRow>
             </TableHeader>
