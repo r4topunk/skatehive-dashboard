@@ -7,6 +7,7 @@ import {
   Users,
   Handshake,
   Activity,
+  Copy,
   Zap,
 } from "lucide-react"
 
@@ -27,6 +28,7 @@ import {
 const navItems = [
   { title: "Overview", href: "/", icon: LayoutDashboard },
   { title: "Users", href: "/users", icon: Users },
+  { title: "Duplicates", href: "/duplicates", icon: Copy },
   { title: "Sponsorships", href: "/sponsorships", icon: Handshake },
   { title: "Activity", href: "/activity", icon: Activity },
 ]
