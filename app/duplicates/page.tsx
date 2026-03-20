@@ -7,7 +7,7 @@ import { DuplicatesView } from "@/components/dashboard/duplicates-view"
 
 export type DuplicateGroup = {
   key: string
-  type: "evm_address" | "hive_handle" | "email"
+  type: "evm_address" | "hive_handle" | "email" | "display_name" | "orphan"
   value: string
   users: {
     user: User
@@ -137,6 +137,62 @@ export default async function DuplicatesPage() {
         }),
       })
     }
+  }
+
+  // 4. Same display_name across different users (catches orphan duplicates like vaipraonde)
+  const nameIndex = new Map<string, string[]>()
+  for (const u of users) {
+    const name = (u.display_name ?? u.handle ?? "").toLowerCase().trim()
+    if (!name) continue
+    const arr = nameIndex.get(name) ?? []
+    arr.push(u.id)
+    nameIndex.set(name, arr)
+  }
+  // Deduplicate: skip groups already covered by identity-based detection
+  const alreadyGrouped = new Set(groups.flatMap((g) => g.users.map((u) => u.user.id)))
+  for (const [name, userIds] of nameIndex) {
+    if (userIds.length > 1) {
+      // Only add if at least one user in this group isn't already in an identity-based group
+      const hasNewUsers = userIds.some((uid) => !alreadyGrouped.has(uid))
+      if (hasNewUsers) {
+        groups.push({
+          key: `name:${name}`,
+          type: "display_name",
+          value: name,
+          users: userIds.map((uid) => {
+            const user = userMap.get(uid)!
+            const ids = identityMap.get(uid) ?? []
+            return {
+              user,
+              tier: getUserTier(ids),
+              identities: ids,
+              email: emailMap.get(uid) ?? null,
+              createdAt: user.created_at,
+            }
+          }),
+        })
+      }
+    }
+  }
+
+  // 5. Orphan accounts — users with zero identities
+  const orphans = users.filter((u) => {
+    const ids = identityMap.get(u.id) ?? []
+    return ids.length === 0
+  })
+  if (orphans.length > 0) {
+    groups.push({
+      key: "orphans",
+      type: "orphan",
+      value: `${orphans.length} accounts with no identity`,
+      users: orphans.map((user) => ({
+        user,
+        tier: getUserTier([]),
+        identities: [],
+        email: emailMap.get(user.id) ?? null,
+        createdAt: user.created_at,
+      })),
+    })
   }
 
   // Sort: most duplicates first

@@ -10,12 +10,14 @@ import { Input } from "@/components/ui/input"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { Wallet, AtSign, Mail, Search, AlertTriangle, ChevronRight, Copy, Check } from "lucide-react"
+import { Wallet, AtSign, Mail, Search, AlertTriangle, ChevronRight, Copy, Check, User, Ghost } from "lucide-react"
 
 const typeConfig = {
   evm_address: { label: "EVM Address", icon: Wallet, color: "text-chart-2" },
   hive_handle: { label: "Hive Handle", icon: AtSign, color: "text-primary" },
   email: { label: "Email", icon: Mail, color: "text-chart-4" },
+  display_name: { label: "Display Name", icon: User, color: "text-orange-400" },
+  orphan: { label: "Orphan (no identity)", icon: Ghost, color: "text-red-400" },
 } as const
 
 function truncateAddr(addr: string) {
@@ -50,14 +52,14 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-type FilterType = "all" | "evm_address" | "hive_handle" | "email"
+type FilterType = "all" | "evm_address" | "hive_handle" | "email" | "display_name" | "orphan"
 
 export function DuplicatesView({ groups }: { groups: DuplicateGroup[] }) {
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<FilterType>("all")
 
   const counts = useMemo(() => {
-    const c = { evm_address: 0, hive_handle: 0, email: 0 }
+    const c = { evm_address: 0, hive_handle: 0, email: 0, display_name: 0, orphan: 0 }
     for (const g of groups) c[g.type]++
     return c
   }, [groups])
@@ -100,7 +102,7 @@ export function DuplicatesView({ groups }: { groups: DuplicateGroup[] }) {
   return (
     <div className="space-y-4">
       {/* Summary cards */}
-      <div className="grid gap-3 grid-cols-3">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {(Object.entries(counts) as [keyof typeof counts, number][]).map(([type, count]) => {
           const cfg = typeConfig[type]
           const Icon = cfg.icon
@@ -154,7 +156,7 @@ export function DuplicatesView({ groups }: { groups: DuplicateGroup[] }) {
                         ? truncateAddr(group.value)
                         : group.value}
                     </code>
-                    <CopyButton text={group.value} />
+                    {group.type !== "orphan" && <CopyButton text={group.value} />}
                   </div>
                   <Badge variant="outline" className="tabular-nums">
                     {group.users.length} accounts
@@ -198,6 +200,9 @@ export function DuplicatesView({ groups }: { groups: DuplicateGroup[] }) {
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
+                              {entry.identities.length === 0 && (
+                                <span className="text-xs text-red-400 italic">no identity</span>
+                              )}
                               {entry.identities.map((id) => (
                                 <Badge
                                   key={id.id}
